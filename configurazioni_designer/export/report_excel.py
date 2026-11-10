@@ -131,7 +131,7 @@ def _leggimi(ws, cfg, info):
         ("Realizzabilità", "Parti, curve, attuatori, stampa."),
         ("Ingestione getti", "Indice di riaspirazione per ogni comando su più assi."),
         ("Tutti i progetti", "Ogni combinazione valutata dall'ottimizzatore, anche le scartate."),
-        ("Scenari", "Descrizione e parametri degli scenari confrontati (da INPUT.py)."),
+        ("Scenari", "Descrizione e parametri degli scenari confrontati (da input_*.py)."),
         ("Ipotesi e fonti", "Correlazioni usate, campo di validità, valori segnaposto."),
         ("", ""),
         ("LEGENDA", ""),
@@ -158,7 +158,7 @@ def _classifica(ws, risultati, cfg):
     for j, c in enumerate(crit):
         _cella(ws, 4, 4 + j, c, font=F_B)
         _cella(ws, 5, 4 + j, cfg["ottimizzazione"]["pesi"][c], "0.00", F_IN, FILL_IN)
-    _cella(ws, 5, 1, "← valori da INPUT.py, modificabili qui")
+    _cella(ws, 5, 1, "← valori da input_*.py, modificabili qui")
     tit = (["Scenario", "Nome", "Ammissibile"] + [f"punteggio {c}" for c in crit] +
            ["Totale pesato", "Posizione", "Violazioni | avvisi", "D (mm)", "σ ugello", "Tipo di ventola", "Motore",
             "Potenza per asse (W)", "Libero dopo i componenti", "Massa totale stimata (kg)",
@@ -473,7 +473,7 @@ def _massa(ws, risultati, cfg):
     mis = cfg["missione"]
     _titolo(ws, "Bilancio di massa (progetto ottimo)",
             f"Obiettivo {mis['massa_obiettivo_kg']:.2f} kg, massima ammessa {mis['massa_massima_kg']:.2f} kg. "
-            "Stime parametriche: parametri nella sezione TELAIO di INPUT.py. Le righe in grigio sono formule.")
+            "Stime parametriche: parametri nella sezione TELAIO di input_*.py. Le righe in grigio sono formule.")
     ott = _ottimi_lista(risultati)
     if not ott:
         return
@@ -601,7 +601,7 @@ def _viol_geom(g):
 
 def _database(ws, scenari):
     ws.title = "Scenari"
-    _titolo(ws, "Scenari confrontati", "Da INPUT.py, sezione 11 (SCENARI).")
+    _titolo(ws, "Scenari confrontati", "Da input_*.py, sezione 11 (SCENARI).")
     tit = ["Id", "Nome", "Topologia", "Origine", "Descrizione", "Pregi attesi", "Difetti attesi", "Parametri"]
     _intest(ws, 4, tit)
     for i, s in enumerate(scenari):
@@ -634,10 +634,10 @@ def _ipotesi(ws, cfg):
         ("Ingestione", "Indice di screening (pozzo emisferico contro getto tondo): NON è una previsione CFD."),
         ("Dinamica", "Salita con limite di corrente; PD con zero a ω_c/3; attuatore del primo ordine τ = t90/2,3."),
         ("Struttura", "Tubo appoggiato + massa (Dunkerley); p_cr = 2E/(1−ν²)(t/D)³; flessione della massa a n g."),
-        ("Lato del cubo", "Intervallo e passo in INPUT.py (GEOMETRIA). Per ogni lato si ripete tutta l'ottimizzazione; l'ottimo è il progetto ammissibile con il punteggio più alto (a parità: condotto più centrato, poi cubo più piccolo). La spinta richiesta non dipende dal lato: dipende dalla massa di progetto."),
+        ("Lato del cubo", "Intervallo e passo in input_*.py (GEOMETRIA). Per ogni lato si ripete tutta l'ottimizzazione; l'ottimo è il progetto ammissibile con il punteggio più alto (a parità: condotto più centrato, poi cubo più piccolo). La spinta richiesta non dipende dal lato: dipende dalla massa di progetto."),
         ("Spazio", f"Voxel da {cfg['esecuzione']['risoluzione_voxel_mm']} mm; tubi come capsule (prudente sulle curve); componenti come scatole; volumetti d'angolo tolti ai vertici."),
         ("Spigoli centrati", "Condotto dritto per ogni spigolo, tangente alle due facce, centrato sulla mezzeria. Accorciato (lunghezza_frazione) e/o spostato lungo lo spigolo (spostamento_frazione) fino a che le estremità restano a distanza c = a − (2 Ro + gioco) dal vertice. Ai vertici si toglie un volumetto d'angolo dalle estremità alla faccia interna: il vertice è aperto e i condotti sboccano lì."),
-        ("Massa", "Stima parametrica (condotti/massa.py, parametri TELAIO in INPUT.py): guscio a spessore equivalente, longheroni e nodi, pareti dei condotti, alloggiamenti, staffe, flange e griglie, fori di vertice, motori, ESC, cavi, viteria; componenti da COMPONENTI e MASSE_FISSE. SEGNAPOSTO finché non si pesa un prototipo."),
+        ("Massa", "Stima parametrica (configurazioni_designer/modelli/massa.py, parametri TELAIO in input_*.py): guscio a spessore equivalente, longheroni e nodi, pareti dei condotti, alloggiamenti, staffe, flange e griglie, fori di vertice, motori, ESC, cavi, viteria; componenti da COMPONENTI e MASSE_FISSE. SEGNAPOSTO finché non si pesa un prototipo."),
         ("Componenti", "Batteria NiMH 150×100×80, avionica 200×150×50 (COMPASS); inviluppo ruote 130³ SEGNAPOSTO."),
         ("Fonti", "Idelchik, Handbook of Hydraulic Resistance; Miller, Internal Flow Systems; AMCA 201; Pereira 2008; Graf 2005; Akturk & Camci 2011; Brandt & Selig 2011; ESA EUG cap. 5; ESDP; SPFC."),
     ]

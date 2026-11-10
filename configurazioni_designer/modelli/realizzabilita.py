@@ -1,6 +1,6 @@
 """Realizzabilità pratica e numero di parti.
 
-Il punteggio di realizzabilità (0-1) combina, con pesi in INPUT.py:
+Il punteggio di realizzabilità (0-1) combina, con pesi in input_*.py:
   parti      numero di pezzi stampati (i condotti più lunghi del piatto di
              stampa si dividono in più pezzi con giunti)
   curve      numero di curve e raggio minimo (R/D < 1 richiede supporti)
@@ -11,7 +11,7 @@ La massa è in massa.py.
 """
 import math
 
-from .costruttore import _segmenti, _lunghezza_seq
+from ..fluido.costruttore import _segmenti, _lunghezza_seq
 
 
 def _scala(x, x0, x1):

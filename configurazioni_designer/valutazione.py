@@ -14,16 +14,16 @@ import itertools
 import math
 import numpy as np
 
-from . import geometria as G
-from . import rete as R
-from . import prestazioni as PR
-from .ponte_dinamica import propulsore as DY
-from . import struttura as ST
-from . import realizzabilita as RZ
-from . import massa as MA
-from .scenari import genera_layout
-from .costruttore import costruisci_unita
-from .realizzabilita import _scala
+from .geometria import geometria as G
+from .fluido import rete as R
+from .modelli import prestazioni as PR
+from .core.ponte_dinamica import propulsore as DY
+from .modelli import struttura as ST
+from .modelli import realizzabilita as RZ
+from .modelli import massa as MA
+from .geometria.scenari import genera_layout
+from .fluido.costruttore import costruisci_unita
+from .modelli.realizzabilita import _scala
 
 
 # =========================================================================

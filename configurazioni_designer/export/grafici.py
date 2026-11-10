@@ -8,11 +8,11 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon, Circle, Rectangle
 
-from . import rete as R
-from .ponte_dinamica import propulsore as DY
-from . import struttura as ST
-from .geometria import tubi_unita, box_dietro_faccia
-from .aria import crea_aria
+from ..fluido import rete as R
+from ..core.ponte_dinamica import propulsore as DY
+from ..modelli import struttura as ST
+from ..geometria.geometria import tubi_unita, box_dietro_faccia
+from ..fluido.aria import crea_aria
 
 plt.rcParams.update({"font.size": 9, "axes.grid": True, "grid.alpha": 0.3, "figure.dpi": 110,
                      "axes.spines.top": False, "axes.spines.right": False, "svg.fonttype": "none"})
@@ -613,7 +613,7 @@ def grafico_massa(ott, cfg, percorso, formati):
     ax.set_yticklabels(voci, fontsize=7)
     ax.invert_yaxis()
     ax.set_xlabel("massa (g)")
-    ax.set_title("Voci che cambiano con la configurazione (stime parametriche: TELAIO in INPUT.py)")
+    ax.set_title("Voci che cambiano con la configurazione (stime parametriche: TELAIO in input_*.py)")
     ax.legend(fontsize=7)
     fig.tight_layout()
     return _salva(fig, percorso, formati)

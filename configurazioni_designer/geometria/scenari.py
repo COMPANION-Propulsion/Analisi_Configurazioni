@@ -1,6 +1,6 @@
 """Generatori parametrici delle disposizioni dei condotti.
 
-Ogni generatore riceve: il dizionario dello scenario (da INPUT.py), il
+Ogni generatore riceve: il dizionario dello scenario (da input_*.py), il
 diametro del condotto alla ventola D [mm], il rapporto d'area dell'ugello
 sigma e la configurazione generale; restituisce un Layout.
 
@@ -140,7 +140,7 @@ def gen_spigoli_centrati(sc, D, sigma, cfg):
         (c è il limite di gioco con i due condotti che arrivano nello stesso vertice);
       - il volumetto d'angolo, tolto al vertice, comincia dalle estremità dei condotti e arriva
         alla faccia interna: attraverso di lui i condotti aspirano e soffiano verso l'esterno.
-    Due parametri (sezione 11 di INPUT.py):
+    Due parametri (sezione 11 di input_*.py):
       lunghezza_frazione     lunghezza del condotto / lunghezza massima 2c (1 = arriva al limite)
       spostamento_frazione   spostamento lungo lo spigolo, in frazione del margine disponibile;
                              0 = centrato, con i tre piani di simmetria

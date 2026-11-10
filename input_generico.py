@@ -1,9 +1,11 @@
 """INPUT GENERICO dell'analisi dei condotti di COMPANION: scenari S1, S2, S3.
 
-È il file da modificare per il confronto tra S1, S2 e S3.  Dopo averlo salvato si lancia RUN_generica.py.
-La configurazione S4 (spigoli centrati) ha un input suo: INPUT_S4.py.
+È il file da modificare per il confronto tra S1, S2 e S3.  Dopo averlo salvato si lancia run_generica.py: i risultati vanno in
+risultati/<caso>/ (sintesi in 00_sintesi/RISULTATO.md).  La configurazione S4 (spigoli centrati) ha un
+input suo: input_S4.py.
 
 Sezioni, nell'ordine in cui conviene leggerle:
+      CASO              nome della cartella dei risultati
    0  ESECUZIONE        che cosa eseguire e come (veloce / completa)
    1  MISSIONE E MASSA  spinta richiesta, obiettivo di massa (4 kg)
    2  AMBIENTI          aria in cabina e in laboratorio
@@ -33,15 +35,22 @@ Convenzione degli assi (origine nel centro del cubo, mm):
 """
 
 # =============================================================================
+# CASO   (cartella dei risultati: risultati/<nome>/)
+# =============================================================================
+CASO = {
+    "nome": None,                  # None = nome automatico (run, spinta, lati, ambiente, scenari + impronta degli input)
+    "sovrascrivi": False,          # True = riusa una cartella con nome anche se gli input erano diversi
+}
+
+# =============================================================================
 # 0. ESECUZIONE
 # =============================================================================
 ESECUZIONE = {
-    "etichetta": "",               # testo libero nel nome della cartella di output ("" = automatico)
     "modalita": "completa",        # "completa" (qualche minuto) oppure "veloce" (griglia ridotta, per prove)
     "verifiche_fisiche": True,     # prima dell'analisi controlla il codice contro risultati noti
     "risoluzione_voxel_mm": 4.0,   # 4 mm: buon compromesso; 2-3 mm per i risultati finali
     "formato_grafici": ["svg"],    # ["svg"] oppure ["svg", "png"]
-    "cartella_output": "output",
+    "cartella_output": "risultati",   # cartella dei casi (relativa alla cartella del progetto)
 }
 # Quali scenari analizzare: si sceglie con "attivo": True / False in fondo al file (sezione 11).
 
@@ -83,7 +92,7 @@ AMBIENTE_PROGETTO = "volo_20C"
 # =============================================================================
 GEOMETRIA = {
     # Il lato del cubo NON è un dato: l'analisi lo cerca dentro questo intervallo, per ogni scenario.
-    # Il lato ottimo di ogni scenario compare nel terminale, nell'Excel e nei dati di output.
+    # Il lato ottimo di ogni scenario compare nel terminale, nell'Excel e in risultati/<caso>/00_sintesi/RISULTATO.md.
     "lato_cubo_min_mm": 320.0,      # limite inferiore dell'intervallo (mm)
     "lato_cubo_max_mm": 360.0,      # limite superiore (mm)
     "lato_cubo_passo_mm": 10.0,     # passo: ogni lato in più allunga la run (280-350 con passo 10 = 8 lati)
@@ -135,7 +144,7 @@ MASSE_FISSE = {
 # 5. TELAIO   (stima della massa della struttura; tutti SEGNAPOSTO finché non si pesa un prototipo)
 # =============================================================================
 # Ogni configurazione si porta dietro una massa strutturale diversa: condotti più lunghi,
-# curve, staffe, fori nel guscio, tacche e blocchi di vertice.  Dettaglio delle voci in condotti/massa.py.
+# curve, staffe, fori nel guscio, tacche e blocchi di vertice.  Dettaglio delle voci in configurazioni_designer/modelli/massa.py.
 TELAIO = {
     "materiale_guscio": "PETG (FDM)",       # uno dei MATERIALI (sezione 9)
     "spessore_equivalente_guscio_mm": 1.0,  # massa del pannello / (area · densità): pannello nervato o sandwich
@@ -269,7 +278,7 @@ REALIZZABILITA = {
 # 11. SCENARI   (le configurazioni dei condotti da confrontare)
 # =============================================================================
 # Campi obbligatori: id, nome, topologia, descrizione.  "attivo": False esclude lo scenario.
-# Topologie disponibili (generatori in condotti/scenari.py):
+# Topologie disponibili (generatori in configurazioni_designer/geometria/scenari.py):
 #   sfalsati           condotti dritti lungo tutto il lato, sfalsamento ciclico
 #   spigoli_corti      condotti lunghi mezzo spigolo, presa laterale a metà spigolo
 # Per aggiungere uno scenario: copiare un blocco, cambiare id e parametri.

@@ -2,7 +2,7 @@
 
 Serve a confrontare le configurazioni sulla massa che ciascuna si porta
 dietro solo per avere quei condotti, e a vedere se l'obiettivo di massa è a
-rischio.  Ogni voce è una stima parametrica con i parametri in INPUT.py
+rischio.  Ogni voce è una stima parametrica con i parametri in input_*.py
 (sezione TELAIO, valori SEGNAPOSTO finché non si pesa un prototipo).
 
 Voci (kg)
@@ -20,7 +20,7 @@ Voci (kg)
 import math
 import numpy as np
 
-from .costruttore import _segmenti, _lunghezza_seq
+from ..fluido.costruttore import _segmenti, _lunghezza_seq
 
 STRUTTURALI = ("guscio", "telaio", "struttura portante", "condotti", "alloggiamenti ventola", "staffe", "bocche (flange e griglie)")
 GRUPPI = {

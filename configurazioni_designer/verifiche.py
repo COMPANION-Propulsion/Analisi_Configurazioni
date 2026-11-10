@@ -1,7 +1,7 @@
-"""Verifiche fisiche automatiche del pacchetto 'condotti'.
+"""Verifiche fisiche automatiche del pacchetto configurazioni_designer.
 
 le run le eseguono prima dell'analisi (ESECUZIONE["verifiche_fisiche"]);
-da sole:  python -m condotti.verifiche
+da sole:  python -m configurazioni_designer.verifiche
 
 Ogni test confronta il codice con un risultato noto (formula analitica,
 conservazione, legge di scala, simmetria).  Se un test fallisce, i
@@ -11,15 +11,15 @@ import math
 import sys
 import numpy as np
 
-from .aria import crea_aria
-from . import perdite as P
-from . import rete as R
-from .ventole import TipoVentola, Ventola
-from .geometria import dist_segmenti, dist_segmenti_vett, gioco_minimo, Griglia3D, tubi_unita
-from . import prestazioni as PR
-from . import massa as MA
-from .scenari import gen_spigoli_centrati
-from .config import lati_del_cubo, cfg_con_lato
+from .fluido.aria import crea_aria
+from .fluido import perdite as P
+from .fluido import rete as R
+from .fluido.ventole import TipoVentola, Ventola
+from .geometria.geometria import dist_segmenti, dist_segmenti_vett, gioco_minimo, Griglia3D, tubi_unita
+from .modelli import prestazioni as PR
+from .modelli import massa as MA
+from .geometria.scenari import gen_spigoli_centrati
+from .core.config import lati_del_cubo, cfg_con_lato
 
 ARIA = crea_aria("prova", 82500.0, 293.15)
 TIPO = TipoVentola("prova", phi_d=0.5, psi_d=0.25, psi_0_su_psi_d=1.4, eta_max=0.7, Re_rif=2e5,

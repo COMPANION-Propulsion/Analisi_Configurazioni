@@ -1,7 +1,9 @@
-# Dipendenze di RUN.py e del pacchetto condotti/
+# Dipendenze di run_generica.py, run_S4.py e del pacchetto configurazioni_designer/
 # Installazione: pip install -r requirements.txt
-# Versioni provate: Python 3.14, numpy 2.5.3, scipy 1.18.1, matplotlib 3.11.1, openpyxl 3.1.5
+# Serve anche ../Dinamica_Sistema_Propulsivo accanto a questa cartella (modello del propulsore)
+# Versioni provate: Python 3.14, numpy 2.5.3, scipy 1.18.1, matplotlib 3.11.1, openpyxl 3.1.5, pytest 9.1.1
 numpy>=1.24
 scipy>=1.10
 matplotlib>=3.7
 openpyxl>=3.1
+pytest>=7

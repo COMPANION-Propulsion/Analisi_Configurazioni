@@ -5,7 +5,11 @@ import json
 import math
 import os
 
-from .aria import crea_aria
+from ..fluido.aria import crea_aria
+from .caso import CASO_PREDEFINITO
+
+# chiavi di ESECUZIONE che non cambiano i risultati: fuori dall'impronta
+SOLO_FORMA = ("etichetta", "cartella_output", "formato_grafici", "verifiche_fisiche")
 
 
 def _carica_modulo(percorso, nome):
@@ -35,6 +39,7 @@ def cfg_con_lato(cfg, lato_mm):
 def carica(percorso_input):
     inp = _carica_modulo(percorso_input, "input_utente")
     cfg = {
+        "caso": {**CASO_PREDEFINITO, **dict(getattr(inp, "CASO", None) or {})},
         "esecuzione": dict(inp.ESECUZIONE),
         "missione": dict(inp.MISSIONE),
         "ambienti": dict(inp.AMBIENTI),
@@ -70,7 +75,7 @@ def carica(percorso_input):
         m["spinta_per_asse_N"] = m["margine_spinta"] * m["massa_per_spinta_kg"] * (a_res + a_tr)
         m["origine_spinta"] = "k_m · m · (n g + 4 d / t²), come in Propulsione_dimensionamento.xlsx"
     else:
-        m["origine_spinta"] = "imposta in INPUT.py"
+        m["origine_spinta"] = "imposta nel file di input"
     # la spinta richiesta è proporzionale alla massa: serve per ricontrollarla con la massa stimata
     m["spinta_per_kg_N"] = m["spinta_per_asse_N"] / m["massa_per_spinta_kg"]
     if m.get("massa_massima_kg") is None:
@@ -83,6 +88,8 @@ def carica(percorso_input):
 
 def _verifica(cfg, scenari):
     errori = []
+    if set(cfg["caso"]) - set(CASO_PREDEFINITO):
+        errori.append(f"chiavi sconosciute in CASO: {sorted(set(cfg['caso']) - set(CASO_PREDEFINITO))}")
     g = cfg["geometria"]
     if g["parete_condotto_mm"] < 0.6:
         errori.append("parete del condotto sotto 0,6 mm: non stampabile")
@@ -112,7 +119,7 @@ def _verifica(cfg, scenari):
     ids = [s["id"] for s in scenari]
     if len(ids) != len(set(ids)):
         errori.append("id di scenario duplicati in SCENARI")
-    from .scenari import GENERATORI
+    from ..geometria.scenari import GENERATORI
     for s in scenari:
         for k in ("id", "nome", "topologia", "descrizione"):
             if k not in s:
@@ -126,7 +133,13 @@ def _verifica(cfg, scenari):
 
 
 def impronta(cfg, scenari):
-    """Hash breve degli input: stessa impronta = stessi dati."""
+    """Hash breve dei dati che cambiano i risultati: stessa impronta = stessi risultati.
+
+    Esclusi il CASO (nome della cartella) e le chiavi di ESECUZIONE che non cambiano i numeri.
+    """
+    cfg = {k: v for k, v in cfg.items() if k != "caso"}
+    cfg["esecuzione"] = {k: v for k, v in cfg["esecuzione"].items() if k not in SOLO_FORMA}
+
     def pulito(o):
         if isinstance(o, dict):
             return {k: pulito(v) for k, v in o.items() if k not in ("arie", "aria_progetto")}

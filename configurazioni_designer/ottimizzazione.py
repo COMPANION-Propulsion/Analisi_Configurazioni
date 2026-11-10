@@ -18,9 +18,9 @@ import math
 import time
 
 from . import valutazione as V
-from .config import cfg_con_lato
-from .scenari import genera_layout
-from .ventole import libreria_ventole, libreria_motori
+from .core.config import cfg_con_lato
+from .geometria.scenari import genera_layout
+from .fluido.ventole import libreria_ventole, libreria_motori
 
 
 def varianti(sc):

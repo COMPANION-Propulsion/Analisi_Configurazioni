@@ -15,7 +15,7 @@ più vicino, e la velocità locale del getto.
                semi-larghezza b = D/2 + 0,11 x
   presa a filo parete: pozzo emisferico, v = Q / (2 pi r^2), attenuato
                (1 + cos gamma)/2 per i punti di lato o dietro la faccia.
-Soglie (INPUT.py): < 0,05 trascurabile, > 0,20 probabile ingestione.
+Soglie (input_*.py): < 0,05 trascurabile, > 0,20 probabile ingestione.
 """
 import itertools
 import math

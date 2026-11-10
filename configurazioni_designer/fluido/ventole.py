@@ -167,7 +167,7 @@ class Ventola:
 
 
 def libreria_ventole(cfg):
-    """Costruisce i tipi di ventola dal dizionario in INPUT.py."""
+    """Costruisce i tipi di ventola dal dizionario in input_*.py."""
     out = {}
     for nome, p in cfg.items():
         out[nome] = TipoVentola(nome=nome, **p)
