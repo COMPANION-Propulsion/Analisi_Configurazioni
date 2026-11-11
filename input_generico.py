@@ -59,15 +59,15 @@ ESECUZIONE = {
 # =============================================================================
 MISSIONE = {
     # --- massa
-    "massa_per_spinta_kg": 5,       # massa con cui si dimensiona la spinta [COMP] 4,15 kg + 0,90 kg ruote, margine 20 %
+    "massa_per_spinta_kg": 4.5,     # [team] massa di missione, la stessa di Dimensionamento e Dinamica (prima 5 kg)
     "massa_obiettivo_kg": 4.0,      # obiettivo del team: oltre, avviso e punteggio "massa" più basso
     "massa_massima_kg": None,       # oltre: progetto NON ammissibile (None = uguale a massa_per_spinta_kg,
                                     #   cioè la massa oltre la quale la spinta di progetto non basta più)
     "massa_vincolante": True,       # False = la massa massima dà solo un avviso, non esclude il progetto
     # --- spinta
     "disturbo_residuo_g": 0.01,     # [EUG] ±0,01 g sugli assi laterali [XLS]
-    "distanza_traslazione_m": 0.3,  # [XLS] SEGNAPOSTO
-    "tempo_traslazione_s": 3.0,     # [XLS] SEGNAPOSTO, dentro la finestra di 5 s
+    "distanza_traslazione_m": 0.2,  # [team] come in Dimensionamento e Dinamica
+    "tempo_traslazione_s": 5.0,     # [team] bang-bang da fermo a fermo, tutta la finestra di 5 s
     "margine_spinta": 1.2,          # [XLS]
     "spinta_per_asse_N": None,      # None = calcolata come in [XLS]: k_m * m * (n g + 4 d / t^2)
     # --- tempi e uso
