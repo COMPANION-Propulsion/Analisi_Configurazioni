@@ -295,7 +295,7 @@ def valuta_completo(gm, aero, cfg, sc, tipo, motore, sigma):
     t90, storia = DY.tempo_salita(motore, J, c0["N_req"], c0["coppia_rotore"],
                                   cfg["elettrico"]["tensione_bus_V"], cfg["elettrico"]["duty_massimo"])
     t_inv = DY.tempo_inversione(motore, J, c0["N_req"], c0["coppia_rotore"],
-                                cfg["elettrico"]["tensione_bus_V"]) if any(u.reversibile for u in lay.unita) else None
+                                cfg["elettrico"]["tensione_bus_V"], cfg["elettrico"]["duty_massimo"]) if any(u.reversibile for u in lay.unita) else None
     t_frenata = t_inv if t_inv is not None else t90
     pm = {wc: DY.margine_fase(t_frenata, wc) for wc in (1.0, 2.0, 4.0)}
     braccio = np.linalg.norm(c0["momento_unita"]) / max(np.linalg.norm(c0["forza_unita"]), 1e-9)
