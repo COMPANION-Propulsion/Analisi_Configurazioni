@@ -38,7 +38,7 @@ Convenzione degli assi (origine nel centro del cubo, mm):
 # CASO   (cartella dei risultati: risultati/<nome>/)
 # =============================================================================
 CASO = {
-    "nome": None,                  # None = nome automatico (run, spinta, lati, ambiente, scenari + impronta degli input)
+    "nome": "RUN_POST_FIX_11-11",                  # None = nome automatico (run, spinta, lati, ambiente, scenari + impronta degli input)
     "sovrascrivi": False,          # True = riusa una cartella con nome anche se gli input erano diversi
 }
 
