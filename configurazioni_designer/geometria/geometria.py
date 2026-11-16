@@ -59,6 +59,8 @@ class UnitaGeom:
     canali: list = field(default_factory=list)     # [(p, q, raggio_esterno, nome)] mm: fori senza ventola
     reversibile: bool = False
     statore: bool = True
+    frazione_intercettata: float = 0.0           # quota del getto che urta il telaio (spigoli_telaio)
+    deviati: list = field(default_factory=list)   # getti deviati dal telaio: [{"pos", "getto", "D"}] mm
 
 
 @dataclass
@@ -69,6 +71,7 @@ class Layout:
     unita: list
     tacche: list = field(default_factory=list)     # [(min, max)] mm: prismi tolti agli spigoli
     solidi: list = field(default_factory=list)     # [(min, max)] mm: pareti piene e travi portanti attorno ai condotti
+    blocchi: list = field(default_factory=list)    # [(min, max)] mm: blocchi pieni dei condotti (spigoli_telaio)
     avvisi: list = field(default_factory=list)
     parametri: dict = field(default_factory=dict)
 

@@ -76,6 +76,8 @@ def ottimizza_scenario(sc, cfg, log=print):
     """
     t0 = time.time()
     tipi = libreria_ventole(cfg["tipi_ventola"])
+    if cfg.get("dimensionamento") is not None:       # una sola ventola: quella del dimensionamento
+        tipi = {"dimensionamento": V.VentolaDimensionamento(cfg["dimensionamento"])}
     motori = libreria_motori(cfg["motori"])
     ott = cfg["ottimizzazione"]
     lati = cfg["lati_cubo_mm"]
@@ -143,7 +145,8 @@ def ottimizza_scenario(sc, cfg, log=print):
 def _chiave_ottimo(p):
     """Punteggio a 4 cifre; a parità il condotto più centrato sullo spigolo, poi il cubo più piccolo."""
     spost = abs(p["geometria"]["layout"].parametri.get("spostamento_mm", 0.0))
-    return (round(p["completo"]["punteggio_totale"], 4), -spost, -p["L"])
+    spost_fr = abs((p.get("variante") or {}).get("spostamento_frazione", 0.0))
+    return (round(p["completo"]["punteggio_totale"], 4), -round(spost, 3), -spost_fr, -p["L"])
 
 
 def _meno_peggio(progetti, sc, cfg, tipi, motori, log):

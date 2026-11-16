@@ -66,6 +66,20 @@ def carica(percorso_input):
         "realizzabilita": dict(inp.REALIZZABILITA),
     }
     scenari = [dict(s) for s in inp.SCENARI if s.get("attivo", True)]
+    # dati del dimensionamento (../Dimensionamento_Sistema_Propulsivo/risultati/<caso>/): sostituiscono
+    # massa e spinta di missione, diametro del condotto, ventola e rotore
+    di = getattr(inp, "DIMENSIONAMENTO", None)
+    if di:
+        from . import dimensionamento as DM
+        dim = DM.carica(float(di["massa_kg"]), bool(di["statore"]), di.get("caso"), di.get("cartella_risultati"),
+                        di.get("usa_spinta_ventola_vera", True))
+        cfg["dimensionamento"] = dim
+        m = cfg["missione"]
+        m.update({"massa_per_spinta_kg": dim["massa_kg"], "spinta_per_asse_N": dim["T_totale_N"],
+                  "disturbo_residuo_g": dim["disturbo_residuo_g"], "distanza_traslazione_m": dim["distanza_m"],
+                  "tempo_traslazione_s": dim["tempo_s"], "margine_spinta": dim["fattore_margine"]})
+        cfg["ottimizzazione"]["diametri_mm"] = [dim["D_ventola_mm"]]
+        cfg["ottimizzazione"]["sigma"] = [1.0]
     _verifica(cfg, scenari)
     # grandezze derivate
     m = cfg["missione"]
@@ -74,6 +88,10 @@ def carica(percorso_input):
         a_tr = 4 * m["distanza_traslazione_m"] / m["tempo_traslazione_s"] ** 2
         m["spinta_per_asse_N"] = m["margine_spinta"] * m["massa_per_spinta_kg"] * (a_res + a_tr)
         m["origine_spinta"] = "k_m · m · (n g + 4 d / t²), come in Propulsione_dimensionamento.xlsx"
+    elif "dimensionamento" in cfg:
+        d = cfg["dimensionamento"]
+        m["origine_spinta"] = (f"dal dimensionamento, caso {d['caso']}: {d['n_ugelli']} ugelli x {d['T_ugello_N']:.3f} N "
+                               f"(margine {d['fattore_margine']:g}, disturbo {d['disturbo_residuo_g']:g} g)")
     else:
         m["origine_spinta"] = "imposta nel file di input"
     # la spinta richiesta è proporzionale alla massa: serve per ricontrollarla con la massa stimata
@@ -121,6 +139,16 @@ def _verifica(cfg, scenari):
         errori.append("id di scenario duplicati in SCENARI")
     from ..geometria.scenari import GENERATORI
     for s in scenari:
+        if s.get("topologia") == "spigoli_telaio":
+            if "dimensionamento" not in cfg:
+                errori.append(f"{s.get('id')}: la topologia 'spigoli_telaio' richiede la sezione DIMENSIONAMENTO")
+            for k in ("lato_barra_mm", "parete_barra_mm", "forma_barra", "materiale_telaio"):
+                if k not in cfg["telaio"]:
+                    errori.append(f"TELAIO senza '{k}' (serve al telaio di alluminio di '{s.get('id')}')")
+            if cfg["telaio"].get("forma_barra") not in (None, "tubo_quadro", "piena"):
+                errori.append("TELAIO['forma_barra'] deve essere 'tubo_quadro' o 'piena'")
+            if cfg["telaio"].get("materiale_telaio") not in cfg["materiali"]:
+                errori.append("TELAIO['materiale_telaio'] non è tra i MATERIALI")
         for k in ("id", "nome", "topologia", "descrizione"):
             if k not in s:
                 errori.append(f"scenario senza campo '{k}'")
@@ -138,6 +166,9 @@ def impronta(cfg, scenari):
     Esclusi il CASO (nome della cartella) e le chiavi di ESECUZIONE che non cambiano i numeri.
     """
     cfg = {k: v for k, v in cfg.items() if k != "caso"}
+    if "dimensionamento" in cfg:      # i dati importati sono individuati dal caso e dalle scelte
+        d = cfg["dimensionamento"]
+        cfg["dimensionamento"] = {k: d[k] for k in ("caso", "statore", "fattore_ventola_vera")}
     cfg["esecuzione"] = {k: v for k, v in cfg["esecuzione"].items() if k not in SOLO_FORMA}
 
     def pulito(o):

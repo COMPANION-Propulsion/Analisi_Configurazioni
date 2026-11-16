@@ -105,6 +105,23 @@ def bilancio_massa(layout, cfg, motore, D_mm, volume_struttura_mm3=0.0):
     m_fl = sum(mat_g["rho"] * t_f / 1000 * math.pi * ((d / 2 + w) ** 2 - (d / 2) ** 2) * 1e-6 for d in fori)
     m_gr = sum(te["densita_rete_griglia_g_m2"] / 1000 * math.pi * d * d / 4 * 1e-6 for d in griglie)
     voci["bocche (flange e griglie)"] = m_fl + m_gr
+    # --- telaio di alluminio con croci sulle facce e blocchi dei condotti (topologia spigoli_telaio):
+    # sostituiscono guscio, longheroni, staffe e alloggiamenti (la ventola sta nel blocco del condotto)
+    if layout.parametri.get("telaio"):
+        mat_t = cfg["materiali"][te["materiale_telaio"]]
+        l, tb = te["lato_barra_mm"], te["parete_barra_mm"]
+        A_sez = l * l if te["forma_barra"] == "piena" else l * l - max(l - 2 * tb, 0.0) ** 2      # mm^2
+        L_barre = 12 * L + 12 * (L - 2 * l)          # spigoli + 2 barre di croce per faccia, tra le barre degli spigoli
+        voci["telaio"] = mat_t["rho"] * A_sez * L_barre * 1e-9 + 8 * te["massa_nodo_g"] / 1000
+        voci["guscio"] = 0.0
+        voci["staffe"] = 0.0
+        voci["alloggiamenti ventola"] = 0.0
+        voci["bocche (flange e griglie)"] = m_gr
+        Ls, ell = layout.parametri["lato_blocco_mm"], layout.parametri["lunghezza_condotto_mm"]
+        r_m = layout.parametri.get("raggio_medio_foro_mm", D_mm / 2)
+        phi = layout.parametri.get("riempimento_blocchi", 1.0)
+        voci["condotti"] = len(layout.blocchi) * mat_c["rho"] * phi * (Ls * Ls - math.pi * r_m * r_m) * ell * 1e-9
+        L_long, n_nodi = L_barre, 8
     # --- propulsione
     rot = cfg["rotore"]
     m_rot = rot["massa_rif_g"] / 1000 * (D_mm / rot["D_rif_mm"]) ** 3

@@ -234,10 +234,135 @@ def gen_spigoli_centrati(sc, D, sigma, cfg):
                              "estremita_max_mm": c, **par_str})
 
 
+def intercettazione_telaio(centro_uv, raggio, h, l, n_r=24, n_t=72):
+    """Quota dell'area di un getto circolare che urta le barre di una faccia del telaio, e baricentro di quella parte.
+
+    Barre della faccia (coordinate u, v nel piano della faccia, origine al centro): le quattro sugli spigoli
+    (|u| >= h - l oppure |v| >= h - l) e la croce (|u| <= l/2 oppure |v| <= l/2).  Campionamento ad area uguale.
+    Ritorna (frazione, baricentro_uv o None).
+    """
+    cu, cv = centro_uv
+    rr = raggio * np.sqrt((np.arange(n_r) + 0.5) / n_r)
+    tt = 2 * math.pi * (np.arange(n_t) + 0.5) / n_t
+    R_, T_ = np.meshgrid(rr, tt)
+    u = cu + R_ * np.cos(T_)
+    v = cv + R_ * np.sin(T_)
+    hi = h - l
+    barra = (np.abs(u) >= hi) | (np.abs(v) >= hi) | (np.abs(u) <= l / 2) | (np.abs(v) <= l / 2)
+    fuori = (np.abs(u) > h) | (np.abs(v) > h)            # fuori dal cubo: aria libera, non barra
+    colpita = barra & ~fuori
+    f = float(colpita.mean())
+    if f <= 0:
+        return 0.0, None
+    return f, (float(u[colpita].mean()), float(v[colpita].mean()))
+
+
+def gen_spigoli_telaio(sc, D, sigma, cfg):
+    """12 condotti lungo gli spigoli dentro un telaio di alluminio; condotto e ventola del dimensionamento.
+
+    Telaio: barre a sezione quadrata di lato l su tutti gli spigoli e una croce per faccia (barre che uniscono
+    le mezzerie degli spigoli opposti); ingombro esterno L, interno L - 2 l.
+    Condotto: blocco a sezione quadrata di lato L* = D_interno_max + 2 x parete minima, con dentro il condotto del
+    dimensionamento (venturi + ventola).  Il blocco tocca la barra spigolo contro spigolo, diagonali allineate:
+    le sue facce esterne stanno sui piani interni del telaio, l'asse è a a = (L/2 - l) - L*/2 dal centro.
+    Vertice: due blocchi che vi arrivano non si toccano se ogni estremità resta entro a - L*/2 - gioco.
+    La parte solida è quella di S4: volumetti d'angolo tolti dalle estremità alla faccia interna del telaio.
+    Lunghezza: L_tubo del dimensionamento + prolunghe dritte; "lunghezza_frazione" (0..1) è la quota della
+    prolunga massima, "spostamento_frazione" (-1..1) lo spostamento lungo lo spigolo in frazione del margine.
+    Getto in uscita: attraversa il piano del telaio; la parte che urta le barre è persa per la spinta e
+    deviata lungo la faccia (vedi intercettazione_telaio e l'indice d'ingestione).
+    """
+    dim = cfg.get("dimensionamento")
+    if dim is None:
+        raise ValueError("la topologia 'spigoli_telaio' richiede la sezione DIMENSIONAMENTO nell'input")
+    g, te = cfg["geometria"], cfg["telaio"]
+    L = g["lato_cubo_mm"]
+    h = L / 2
+    l = float(te["lato_barra_mm"])
+    hi = h - l
+    gap = g["gioco_tra_condotti_mm"]
+    Ls = dim["D_interno_max_mm"] + 2 * float(sc.get("parete_minima_blocco_mm", 2.0))
+    a = hi - Ls / 2
+    e_max = a - Ls / 2 - gap
+    Lt = dim["L_tubo_mm"]
+    D_in, D_us = dim["D_ingresso_mm"], dim["D_uscita_mm"]
+    avvisi = []
+    if 2 * e_max < Lt:
+        avvisi.append(f"IRREALIZZABILE: il condotto del dimensionamento ({Lt:.0f} mm) non entra: "
+                      f"lunghezza massima nel vertice {2 * e_max:.0f} mm")
+        return Layout(sc["id"], L, l, [], avvisi=avvisi)
+    fL = min(max(sc.get("lunghezza_frazione", 0.0), 0.0), 1.0)
+    ell = Lt + fL * (2 * e_max - Lt)
+    margine = e_max - ell / 2
+    delta = min(max(sc.get("spostamento_frazione", 0.0), -1.0), 1.0) * margine
+    q_in = min(max(sc.get("quota_prolunga_ingresso", 0.5), 0.0), 1.0)
+    L_in, L_out = q_in * (ell - Lt), (1 - q_in) * (ell - Lt)
+    s_D1 = sc.get("verso_coppia_D1", -1)
+    s_v = L_in + dim["z_ventola_mm"]
+    unita, blocchi = [], []
+    for A in range(3):
+        u, v = (A + 1) % 3, (A + 2) % 3
+        for (su, sv) in SEGNI:
+            s_th = s_D1 if su * sv > 0 else -s_D1
+            c0 = np.zeros(3)
+            c0[u], c0[v] = su * a, sv * a
+            I, O = c0.copy(), c0.copy()
+            I[A] = delta + s_th * ell / 2          # presa: estremità dal lato della spinta
+            O[A] = delta - s_th * ell / 2          # uscita: il getto va in -s_th
+            nome = f"{'XYZ'[A]}{'+' if su > 0 else '-'}{'+' if sv > 0 else '-'}"
+            # getto attraverso il piano medio delle barre della faccia d'uscita
+            s_getto = (hi + l / 2) - abs(O[A])
+            b = D_us / 2 + 0.11 * max(s_getto, 0.0)
+            f_int, bar_uv = intercettazione_telaio((c0[u], c0[v]), b, h, l)
+            deviati = []
+            if f_int > 0:
+                P = np.zeros(3)
+                P[A] = -s_th * (hi + l / 2)
+                P[u], P[v] = bar_uv
+                d = np.zeros(3)
+                d[u], d[v] = bar_uv[0] - c0[u], bar_uv[1] - c0[v]
+                nd = float(np.linalg.norm(d))
+                d = d / nd if nd > 1e-9 else _e(A, -s_th)
+                deviati.append({"pos": P, "getto": d, "D": D_us * math.sqrt(f_int)})
+            unita.append(UnitaGeom(
+                nome=nome, asse=A, verso=_e(A, s_th),
+                tronco=Percorso("tronco", np.array([I, O]), [], dim["D_ventola_mm"], D_us, 0.0), rami=[],
+                s_ventola=s_v, ingresso={"pos": I, "normale": _e(A, s_th), "D": D_in},
+                uscite=[{"pos": O, "getto": _e(A, -s_th), "D": D_us}],
+                statore=bool(dim["statore"]), frazione_intercettata=f_int, deviati=deviati))
+            mn, mx = np.zeros(3), np.zeros(3)
+            mn[A], mx[A] = delta - ell / 2, delta + ell / 2
+            for j in (u, v):
+                mn[j], mx[j] = c0[j] - Ls / 2, c0[j] + Ls / 2
+            blocchi.append((mn, mx))
+    # volumetti d'angolo (come S4): da ciascuna estremità alla faccia interna del telaio
+    e_piu, e_meno = ell / 2 + delta, ell / 2 - delta
+    volumetti = []
+    for sx in (1, -1):
+        for sy in (1, -1):
+            for sz in (1, -1):
+                mn, mx = np.zeros(3), np.zeros(3)
+                for j, sg in enumerate((sx, sy, sz)):
+                    if sg > 0:
+                        mn[j], mx[j] = e_piu, hi
+                    else:
+                        mn[j], mx[j] = -hi, -e_meno
+                volumetti.append((mn, mx))
+    f_media = float(np.mean([x.frazione_intercettata for x in unita]))
+    return Layout(sc["id"], L, l, unita, tacche=volumetti, blocchi=blocchi, avvisi=avvisi,
+                  parametri={"lunghezza_condotto_mm": ell, "spostamento_mm": delta, "asse_condotto_mm": a,
+                             "estremita_max_mm": e_max, "lato_blocco_mm": Ls, "prolunga_ingresso_mm": L_in,
+                             "prolunga_uscita_mm": L_out, "gioco_mm": a - Ls / 2 - max(e_piu, e_meno),
+                             "frazione_getto_sul_telaio": f_media, "telaio": True, "lato_barra_mm": l,
+                             "raggio_medio_foro_mm": (D_in + dim["D_ventola_mm"] + D_us) / 6,
+                             "riempimento_blocchi": float(sc.get("riempimento_blocchi", 1.0))})
+
+
 GENERATORI = {
     "sfalsati": gen_sfalsati,
     "spigoli_corti": gen_spigoli_corti,
     "spigoli_centrati": gen_spigoli_centrati,
+    "spigoli_telaio": gen_spigoli_telaio,
 }
 
 

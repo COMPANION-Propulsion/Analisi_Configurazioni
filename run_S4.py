@@ -13,7 +13,7 @@ import sys
 from configurazioni_designer.cli import main
 
 # Grafici di scenario prodotti da questa run (gli altri gruppi: ventola, spinta, dinamica, struttura)
-GRUPPI = {"viste", "sezioni", "profili", "perdite", "ingestione"}
+GRUPPI = {"viste", "sezioni", "perdite", "ingestione"}   # profili: non disponibili con il condotto del dimensionamento
 
 if __name__ == "__main__":
     sys.exit(main("S4", "input_S4.py", __doc__, gruppi=GRUPPI, con_confronto=False))

@@ -89,6 +89,8 @@ def scrivi_riepilogo(riep, cfg, info, percorso):
 
 def al_limite(x, g):
     """'inferiore' / 'superiore' se il lato ottimo coincide con un estremo dell'intervallo, altrimenti None."""
+    if g["lato_cubo_max_mm"] - g["lato_cubo_min_mm"] < 1e-6:      # lato fisso: nessun intervallo
+        return None
     if x["L_mm"] <= g["lato_cubo_min_mm"] + 1e-6:
         return "inferiore"
     if x["L_mm"] >= g["lato_cubo_max_mm"] - 1e-6:

@@ -24,6 +24,7 @@ from .modelli import massa as MA
 from .geometria.scenari import genera_layout
 from .fluido.costruttore import costruisci_unita
 from .modelli.realizzabilita import _scala
+from .core import dimensionamento as DM
 
 
 # =========================================================================
@@ -40,12 +41,20 @@ def valuta_geometria(sc, D, cfg, variante=None, colloca_componenti=None):
     g = cfg["geometria"]
     td = g["parete_condotto_mm"]
     lay = genera_layout(sc2, D, 1.0, cfg)
-    gioco, coppia = G.gioco_minimo(lay, td)
     vox = cfg["esecuzione"]["risoluzione_voxel_mm"]
-    gr = G.Griglia3D(g["lato_cubo_mm"], g["parete_cubo_mm"], vox)
-    for u in lay.unita:
-        for p, q, r, _ in G.tubi_unita(u, td):
-            gr.capsula(p, q, r, G.COD_CONDOTTI)
+    if lay.blocchi:
+        # condotti dentro blocchi a sezione quadrata (spigoli_telaio): il gioco nei vertici è geometrico,
+        # lo spazio interno è quello dentro il telaio
+        gioco, coppia = lay.parametri["gioco_mm"], ("vertice", "vertice")
+        gr = G.Griglia3D(g["lato_cubo_mm"], lay.parete, vox)
+        for mn, mx in lay.blocchi:
+            gr.box(mn, mx, G.COD_CONDOTTI)
+    else:
+        gioco, coppia = G.gioco_minimo(lay, td)
+        gr = G.Griglia3D(g["lato_cubo_mm"], g["parete_cubo_mm"], vox)
+        for u in lay.unita:
+            for p, q, r, _ in G.tubi_unita(u, td):
+                gr.capsula(p, q, r, G.COD_CONDOTTI)
     # volumetti d'angolo tolti ai vertici (spigoli centrati)
     for mn, mx in lay.tacche:
         gr.box(mn, mx, G.COD_EXTRA)
@@ -187,8 +196,19 @@ def N_limite(ventola, motore, cfg, aria):
     return min(N_v, N_mach, N_u), {"tensione": N_v, "mach": N_mach, "velocita_punta": N_u}
 
 
+class VentolaDimensionamento:
+    """La ventola del dimensionamento, come 'tipo di ventola' dell'ottimizzazione."""
+    def __init__(self, dim):
+        self.nome = (f"ventola del dimensionamento ({dim['caso']}, {dim['pale']} pale {dim['profilo_pala']}, "
+                     f"{'con' if dim['statore'] else 'senza'} statore)")
+        self.Z = dim["pale"]
+        self.dim = dim
+
+
 def valuta_aero(lay_aero, cfg, D, sigma, tipo, motore, aria=None, completo=True):
     """Punto di progetto per ogni classe di unità; None se la spinta non si raggiunge."""
+    if cfg.get("dimensionamento") is not None:
+        return valuta_aero_dimensionamento(lay_aero, cfg, D, tipo, motore, aria, completo)
     aria = aria or cfg["aria_progetto"]
     F_asse = cfg["missione"]["spinta_per_asse_N"]
     cont = unita_per_verso(lay_aero)
@@ -255,6 +275,95 @@ def valuta_aero(lay_aero, cfg, D, sigma, tipo, motore, aria=None, completo=True)
     return out
 
 
+def valuta_aero_dimensionamento(lay, cfg, D, tipo, motore, aria=None, completo=True):
+    """Come valuta_aero, con condotto e ventola del dimensionamento (core/dimensionamento.py).
+
+    Per ogni gruppo di unità uguali (stessa lunghezza e stessa quota di getto sul telaio): giri, potenza e
+    coppia dalla curva del dimensionamento per la spinta richiesta, con le prolunghe del condotto e la parte di
+    getto che urta il telaio; potenza elettrica e limiti dal modello del motore.
+    """
+    dim = cfg["dimensionamento"]
+    aria = aria or cfg["aria_progetto"]
+    F_asse = cfg["missione"]["spinta_per_asse_N"]
+    cont = unita_per_verso(lay)
+    if not cont or min(cont.values()) == 0:
+        return None
+    el, lim = cfg["elettrico"], cfg["limiti"]
+    par = lay.parametri
+    eps = DM.eps_prolunghe(dim, par.get("prolunga_ingresso_mm", 0.0), par.get("prolunga_uscita_mm", 0.0))
+    D_m = dim["D_ventola_mm"] / 1000
+    A_us = math.pi * (dim["D_uscita_mm"] / 1000) ** 2 / 4
+    gruppi = {}
+    for u in lay.unita:
+        gruppi.setdefault((_firma(u), round(u.frazione_intercettata, 4)), []).append(u)
+    out = {"classi": [], "avvisi": []}
+    for cl in gruppi.values():
+        ug = cl[0]
+        f_int = ug.frazione_intercettata
+        n_dir = max(min(cont[k] for k, (ax, sg) in PR.DIREZIONI.items() if ax == ug.asse), 1)
+        F_u = F_asse / n_dir
+        p = DM.punto(dim, F_u, aria.rho, eps, f_int)
+        if p is None:
+            return None
+        N_req = p["rpm"]
+        N_v = motore.N_max(el["tensione_bus_V"], 0.0, el["duty_massimo"])
+        N_mach = lim["mach_punta_max"] * aria.a * 60 / (math.pi * D_m)
+        N_u = lim["velocita_punta_max_m_s"] * 60 / (math.pi * D_m)
+        N_curva = float(dim["curva"]["rpm"][-1]) * dim["k_rpm_statore"] * math.sqrt(1 + eps)
+        N_lim = min(N_v, N_mach, N_u, N_curva)
+        lim_det = {"tensione": N_v, "mach": N_mach, "velocita_punta": N_u, "curva_dimensionamento": N_curva}
+        if N_req > N_lim:
+            return None
+        mp = motore.punto(p["coppia_Nm"], N_req, el["tensione_bus_V"], cfg["elementi"]["rendimento_esc"],
+                          el["duty_massimo"])
+        U = math.pi * D_m * N_req / 60
+        Q = p["Q_m3_s"]
+        v_us = Q / A_us
+        s = (Q / dim["Q_progetto_m3_s"]) ** 2 * aria.rho / dim["rho_rif"]      # perdite ~ rho Q^2
+        perd_Pa = {"imbocco": dim["perdite_Pa"]["imbocco"] * s, "effetto di sistema": dim["perdite_Pa"]["disco"] * s,
+                   "ugello": dim["perdite_Pa"]["valle"] * s, "attrito": eps * dim["dp_progetto_Pa"] * s}
+        perd_W = {k: v * Q for k, v in perd_Pa.items()}
+        P_utile = Q * p["dp_Pa"]
+        P_getto = 0.5 * p["spinta_ugello_N"] * v_us
+        omega = N_req * 2 * math.pi / 60
+        modi = []
+        for u_ in cl:
+            r = (np.asarray(u_.tronco.punti[0]) + np.asarray(u_.tronco.punti[-1])) / 2000      # m, sull'asse
+            if completo:
+                F_max = DM.spinta_netta_max(dim, N_lim, aria.rho, eps, u_.frazione_intercettata)
+                F = F_max * np.asarray(u_.verso, float)
+                modi.append({"unita": u_.nome, "modo": "pieno", "w": np.concatenate([F, np.cross(r, F)])})
+        r0 = (np.asarray(ug.tronco.punti[0]) + np.asarray(ug.tronco.punti[-1])) / 2000
+        F0 = F_u * np.asarray(ug.verso, float)
+        out["classi"].append({
+            "unita": [u_.nome for u_ in cl], "asse": ug.asse, "n_per_verso": n_dir, "F_unita": F_u,
+            "N_req": N_req, "N_lim": N_lim, "limiti_N": lim_det, "Q": Q, "Q_rami": [Q],
+            "v_uscita": [v_us], "dp_ventola": p["dp_Pa"], "phi": Q / (math.pi * D_m ** 2 / 4) / U,
+            "psi": p["dp_Pa"] / (aria.rho * U * U), "eta": P_utile / max(p["P_albero_W"], 1e-9),
+            "Re_pala": None, "stallo": False, "U_punta": U, "Mach_punta": U / aria.a,
+            "nu_mozzo": dim["D_mozzo_mm"] / dim["D_ventola_mm"], "P_albero": p["P_albero_W"], "P_el": mp["P_el"],
+            "I": mp["I"], "V": mp["V"], "duty": mp["duty"], "eta_motore": mp["eta_motore"],
+            "ok_tensione": mp["ok_tensione"], "ok_corrente": mp["ok_corrente"],
+            "perdite_W": perd_W, "perdite_Pa": perd_Pa, "P_perdite": sum(perd_W.values()),
+            "P_getto": P_getto, "P_utile": P_utile, "frazione_perdite": sum(perd_W.values()) / max(P_utile, 1e-9),
+            "coppia_rotore": p["coppia_Nm"], "coppia_corpo": p["coppia_corpo_Nm"], "omega": omega,
+            "momento_unita": np.cross(r0, F0), "forza_unita": F0, "modi": modi, "avvisi": [],
+            "unita_rete": None, "frazione_intercettata": f_int, "eps_prolunghe": eps})
+    P_asse = {}
+    for c in out["classi"]:
+        for nome in c["unita"]:
+            ax = [u for u in lay.unita if u.nome == nome][0].asse
+            P_asse[ax] = max(P_asse.get(ax, 0.0), c["n_per_verso"] * c["P_el"])
+    out["P_asse"] = P_asse
+    out["P_asse_max"] = max(P_asse.values())
+    out["P_picco_3assi"] = sum(sorted(P_asse.values(), reverse=True)[:cfg["missione"]["assi_contemporanei_max"]])
+    out["I_picco"] = out["P_picco_3assi"] / el["tensione_bus_V"]
+    out["ok_motore"] = all(c["ok_tensione"] and c["ok_corrente"] for c in out["classi"])
+    out["ok_mach"] = all(c["Mach_punta"] <= lim["mach_punta_max"] for c in out["classi"])
+    out["stallo"] = False
+    return out
+
+
 def _modi_unita(ug, cfg, tipo, D, sigma, motore, aria, N_lim):
     """Vettori forza-momento alla massima spinta (e verso inverso se reversibile)."""
     un, _ = costruisci_unita(ug, cfg, tipo, D, sigma, motore)
@@ -292,6 +401,8 @@ def valuta_completo(gm, aero, cfg, sc, tipo, motore, sigma):
     rot = cfg["rotore"]
     m_rot = rot["massa_rif_g"] / 1000 * (gm["D"] / rot["D_rif_mm"]) ** 3
     J = motore.J_rotore + rot["k_inerzia"] * m_rot * (gm["D"] / 2000) ** 2
+    if cfg.get("dimensionamento") is not None:          # pale del dimensionamento (confronto_pale.json)
+        J = motore.J_rotore + cfg["dimensionamento"]["J_pale_kgm2"]
     t90, storia = DY.tempo_salita(motore, J, c0["N_req"], c0["coppia_rotore"],
                                   cfg["elettrico"]["tensione_bus_V"], cfg["elettrico"]["duty_massimo"])
     t_inv = DY.tempo_inversione(motore, J, c0["N_req"], c0["coppia_rotore"],
@@ -323,19 +434,24 @@ def valuta_completo(gm, aero, cfg, sc, tipo, motore, sigma):
     marg_c = ST.margine_campbell(f1, c0["N_req"], tipo.Z)
     p_cr = ST.pressione_critica(gm["D"], td, mat)
     un = c0["unita_rete"]
-    un.imposta_N(c0["N_lim"])
-    sol = R.risolvi([un], aria)[un.nome]
-    prf = R.profili_unita(un, sol, aria)
-    p_min = min(float(np.min(prf["tronco"]["p"])), *[float(np.min(r["p"])) for r in prf["rami"]])
-    un.imposta_N(c0["N_req"])
-    suzione = max(-p_min, 1.0)
+    if un is None:          # condotto del dimensionamento: depressione massima ~ salto di pressione ai giri massimi
+        suzione = max(c0["dp_ventola"] * (c0["N_lim"] / c0["N_req"]) ** 2, 1.0)
+    else:
+        un.imposta_N(c0["N_lim"])
+        sol = R.risolvi([un], aria)[un.nome]
+        prf = R.profili_unita(un, sol, aria)
+        p_min = min(float(np.min(prf["tronco"]["p"])), *[float(np.min(r["p"])) for r in prf["rami"]])
+        un.imposta_N(c0["N_req"])
+        suzione = max(-p_min, 1.0)
     s18 = ST.sforzo_flessione(span, gm["D"], td, M_f, cfg["carichi"]["g_ipergravita"])
-    s9 = ST.sforzo_flessione(span, gm["D"], td, M_f, cfg["carichi"]["g_atterraggio_emergenza"])
+    g9 = cfg["carichi"].get("g_atterraggio_emergenza")
+    s9 = ST.sforzo_flessione(span, gm["D"], td, M_f, g9) if g9 else None
     EI = ST.rigidezza_telaio(lay, td, mat)
     res.update({"campata_ventola_mm": span, "f1_Hz": f1, "risonanze_campbell": cross, "margine_campbell": marg_c,
                 "p_critica_Pa": p_cr, "suzione_max_Pa": suzione, "margine_instabilita": p_cr / suzione,
-                "sforzo_1_8g_MPa": s18 / 1e6, "sforzo_9g_MPa": s9 / 1e6,
-                "margine_sforzo_9g": mat["sigma_snervamento"] / max(s9, 1.0),
+                "sforzo_1_8g_MPa": s18 / 1e6, "sforzo_9g_MPa": s9 / 1e6 if s9 is not None else None,
+                "margine_sforzo_1_8g": mat["sigma_snervamento"] / max(s18, 1.0),
+                "margine_sforzo_9g": mat["sigma_snervamento"] / max(s9, 1.0) if s9 is not None else None,
                 "EI_condotti_Nm2": EI})
     # --- massa
     mb = MA.bilancio_massa(lay, cfg, motore, gm["D"], gm.get("volume_struttura_mm3", 0.0))
@@ -411,6 +527,10 @@ def _ingestione(lay, aero, uso, cfg):
                     uscite.append({"pos": np.asarray(us["pos"]) / 1000, "getto": np.asarray(us["getto"]),
                                    "D": us["D"] / 1000, "V": c["v_uscita"][min(k, len(c["v_uscita"]) - 1)],
                                    "unita": u.nome})
+            if not inv:             # parte del getto deviata dalle barre del telaio (spigoli_telaio)
+                for dv in getattr(u, "deviati", []):
+                    uscite.append({"pos": np.asarray(dv["pos"]) / 1000, "getto": np.asarray(dv["getto"]),
+                                   "D": dv["D"] / 1000, "V": c["v_uscita"][0], "unita": u.nome})
             if inv:
                 prese.append({"pos": np.asarray(u.uscite[0]["pos"]) / 1000, "normale": -np.asarray(u.uscite[0]["getto"]),
                               "Q": c["Q"], "D": u.uscite[0]["D"] / 1000, "unita": u.nome})

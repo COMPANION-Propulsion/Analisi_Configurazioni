@@ -52,7 +52,8 @@ def grafici_scenario(r, cfg, cartella, formati, log, gruppi=TUTTI_I_GRUPPI):
         pass
     except Exception:
         log("   (viste non disegnate)\n" + traceback.format_exc())
-    if "sezioni" in gruppi and o["geometria"]["layout"].solidi:
+    lay_o = o["geometria"]["layout"]
+    if "sezioni" in gruppi and (lay_o.solidi or lay_o.blocchi):
         try:
             out += [("sezioni", p) for p in GR.grafico_sezioni(o["geometria"], cfg, tit, os.path.join(base, "10_sezioni_struttura"), formati)]
         except Exception:
@@ -68,7 +69,8 @@ def grafici_scenario(r, cfg, cartella, formati, log, gruppi=TUTTI_I_GRUPPI):
     N_req, N_lim = cl["N_req"], cl["N_lim"]
     N_lista = [0.5 * N_req, 0.75 * N_req, N_req] + ([N_lim] if N_lim > 1.05 * N_req else [])
     mot = libreria_motori(cfg["motori"])[c["motore"]]
-    Z = libreria_ventole(cfg["tipi_ventola"])[c["tipo_ventola"]].Z
+    tv = libreria_ventole(cfg["tipi_ventola"])
+    Z = tv[c["tipo_ventola"]].Z if c["tipo_ventola"] in tv else (cfg.get("dimensionamento") or {}).get("pale", 3)
     passi = [
         ("profili", lambda: GR.grafico_profili(un, arie, N_lista, amb, tit, os.path.join(base, "02_profili_giri"), formati)),
         ("profili", lambda: GR.grafico_profili_ambienti(un, arie, N_req, tit, os.path.join(base, "03_profili_ambienti"), formati)),

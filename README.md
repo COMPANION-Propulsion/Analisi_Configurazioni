@@ -162,6 +162,44 @@ Se il lato ottimo coincide con un limite dell'intervallo, il terminale lo segnal
 
 Ogni lato in più allunga la run: tempo ≈ numero di lati × tempo di una run a lato fisso.
 
+### S4 di oggi: telaio di alluminio e dati del dimensionamento
+
+`input_S4.py` usa la topologia `spigoli_telaio` (scenario `S4_SPIGOLI_TELAIO_12`). Cerca **la lunghezza ottima del
+condotto e la sua posizione lungo lo spigolo** con il telaio degli strutturisti e il condotto + ventola dei colleghi.
+
+**Da dove arrivano i dati.** La sezione `DIMENSIONAMENTO` sceglie un caso di
+`../Dimensionamento_Sistema_Propulsivo/risultati/<caso>/` (modulo `configurazioni_designer/core/dimensionamento.py`):
+
+| Input | Significato |
+|---|---|
+| `massa_kg` | massa del caso (oggi ci sono casi da 4 e 6 kg) |
+| `statore` | `True` / `False`: giri, potenza e coppia sul veicolo dal confronto con/senza statore del caso |
+| `caso` | `None` = l'unico caso completo e con la ventola convergente per quella massa; oppure il nome della cartella |
+| `usa_spinta_ventola_vera` | corregge la spinta con la CFD "condotto con la ventola vera" del dimensionamento |
+
+Dal caso si prendono: massa, spinta per ugello (con margine e disturbo del dimensionamento), diametro della ventola,
+forma e lunghezza del condotto (venturi), curva giri → spinta → potenza, statore, inerzia delle pale. Questi valori
+**sostituiscono** quelli scritti in `MISSIONE` e `OTTIMIZZAZIONE`.
+
+**Geometria.**
+- Telaio: barre a sezione quadrata (`TELAIO["lato_barra_mm"]`, cave o piene) su tutti gli spigoli più una croce per faccia. Lato esterno 320 mm.
+- Condotto: il condotto del dimensionamento dentro un blocco a sezione quadrata di lato `L* = D_interno_max + 2 × parete_minima_blocco_mm`. Il blocco tocca la barra spigolo contro spigolo, con le diagonali allineate, quindi l'asse è a `a = (L/2 − l) − L*/2` dal centro.
+- Vertici: i blocchi non si toccano se ogni estremità resta entro `a − L*/2 − gioco`. Con 320 mm, barra 10 mm, gioco 3 mm e il condotto da 6 kg (foro max 64 mm): `a = 116 mm`, lunghezza massima 158 mm (il tubo del dimensionamento è 137 mm).
+- Parte solida come S4: volumetti d'angolo dalle estremità alla faccia interna del telaio.
+
+**Variabili ottimizzate** (`varianti_geometria`):
+- `lunghezza_frazione` 0…1: lunghezza = tubo del dimensionamento + quella frazione della prolunga massima nel vertice;
+- `spostamento_frazione` −1…1: spostamento lungo lo spigolo in frazione del margine che resta.
+
+**Cosa conta nell'ottimo.**
+- Getto sul telaio: in uscita il getto si allarga (semilarghezza D/2 + 0,11 x) fino al piano delle barre. La parte che urta le barre è persa per la spinta (servono più giri e più potenza) ed è deviata lungo la faccia: entra nell'indice di ingestione come un getto in più.
+- Prolunghe: attrito (Blasius) aggiunto al condotto, come aumento del salto di pressione e della potenza.
+- Spazio interno (dentro il telaio, senza componenti), massa (telaio + blocchi + propulsione), ingestione, perdite.
+
+**Limiti.** Il getto che urta una barra è una stima (frazione di area intercettata), non una CFD; l'ingresso non vede le barre;
+zone riservate, componenti e masse fisse sono vuoti per scelta, finché non arrivano dagli strutturisti.
+I grafici dei profili lungo il condotto non sono disponibili, perché il condotto è quello del dimensionamento.
+
 ### S4, spigoli centrati: come funziona
 
 Base: ogni spigolo ha un condotto dritto, tangente alle due facce che lo formano. Nel vertice le tre rette dei condotti si incontrerebbero. Per eliminare l'intersezione si fanno due cose, combinabili:

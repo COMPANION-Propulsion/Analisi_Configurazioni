@@ -1,5 +1,10 @@
 """INPUT S4 dell'analisi dei condotti di COMPANION: solo la configurazione S4 (spigoli centrati).
 
+S4 è ora il cubo con TELAIO DI ALLUMINIO (barre sugli spigoli e una croce per faccia, lato 320 mm) e i 12
+condotti del DIMENSIONAMENTO (venturi + ventola dei colleghi, letti da ../Dimensionamento_Sistema_Propulsivo/
+risultati/<caso>/ con la sezione DIMENSIONAMENTO qui sotto).  Si cercano la lunghezza ottima del condotto e la
+sua posizione lungo lo spigolo.
+
 È il file da modificare per l'analisi di S4.  Dopo averlo salvato si lancia run_S4.py: i risultati vanno in
 risultati/<caso>/ (sintesi in 00_sintesi/RISULTATO.md).  La dinamica di volo di S4 è in
 ../Dinamica_Sistema_Propulsivo.  Il confronto S1, S2, S3 ha un input suo: input_generico.py.
@@ -38,8 +43,23 @@ Convenzione degli assi (origine nel centro del cubo, mm):
 # CASO   (cartella dei risultati: risultati/<nome>/)
 # =============================================================================
 CASO = {
-    "nome": "RUN_POST_FIX_11-11",                  # None = nome automatico (run, spinta, lati, ambiente, scenari + impronta degli input)
+    "nome": None,                  # None = nome automatico (run, spinta, lati, ambiente, scenari + impronta degli input)
     "sovrascrivi": False,          # True = riusa una cartella con nome anche se gli input erano diversi
+}
+
+# =============================================================================
+# DIMENSIONAMENTO   (dati dei colleghi: ../Dimensionamento_Sistema_Propulsivo/risultati/<caso>/)
+# =============================================================================
+# Da qui arrivano: massa e spinta di missione (con margine e disturbo), diametro e forma del condotto
+# (venturi), curva giri -> spinta -> potenza della ventola, effetto dello statore, inerzia delle pale.
+# Questi valori SOSTITUISCONO quelli scritti più sotto in MISSIONE e OTTIMIZZAZIONE.
+DIMENSIONAMENTO = {
+    "massa_kg": 6,                   # sceglie il caso con questa massa (casi disponibili: 4 e 6 kg)
+    "statore": False,                # True = con statore, False = senza (dal confronto con/senza statore del caso)
+    "caso": None,                    # None = automatico (unico caso completo e convergente con quella massa),
+                                     #   oppure il nome della cartella, per esempio "Run_20261112_fine_6kg"
+    "cartella_risultati": None,      # None = ../Dimensionamento_Sistema_Propulsivo/risultati
+    "usa_spinta_ventola_vera": True, # True = spinta corretta con la CFD "condotto con la ventola vera" (circa -7 %)
 }
 
 # =============================================================================
@@ -59,17 +79,17 @@ ESECUZIONE = {
 # =============================================================================
 MISSIONE = {
     # --- massa
-    "massa_per_spinta_kg": 4.5,     # [team] massa di missione, la stessa di Dimensionamento e Dinamica (prima 5 kg)
+    "massa_per_spinta_kg": 6.0,     # SOSTITUITA dal dimensionamento (massa del caso scelto)
     "massa_obiettivo_kg": 4.0,      # obiettivo del team: oltre, avviso e punteggio "massa" più basso
     "massa_massima_kg": None,       # oltre: progetto NON ammissibile (None = uguale a massa_per_spinta_kg,
                                     #   cioè la massa oltre la quale la spinta di progetto non basta più)
     "massa_vincolante": True,       # False = la massa massima dà solo un avviso, non esclude il progetto
     # --- spinta
-    "disturbo_residuo_g": 0.01,     # [EUG] ±0,01 g sugli assi laterali [XLS]
+    "disturbo_residuo_g": 0.02,     # SOSTITUITO dal dimensionamento
     "distanza_traslazione_m": 0.2,  # [team] come in Dimensionamento e Dinamica
     "tempo_traslazione_s": 5.0,     # [team] bang-bang da fermo a fermo, tutta la finestra di 5 s
     "margine_spinta": 1.2,          # [XLS]
-    "spinta_per_asse_N": None,      # None = calcolata come in [XLS]: k_m * m * (n g + 4 d / t^2)
+    "spinta_per_asse_N": None,      # SOSTITUITA dal dimensionamento: ugelli per faccia x spinta per ugello
     # --- tempi e uso
     "finestra_libera_s": 5.0,       # [ESA] finestra utile per oggetti liberi
     "durata_microgravita_s": 22.0,  # [EUG]
@@ -93,24 +113,19 @@ AMBIENTE_PROGETTO = "volo_20C"
 GEOMETRIA = {
     # Il lato del cubo NON è un dato: l'analisi lo cerca dentro questo intervallo, per ogni scenario.
     # Il lato ottimo di ogni scenario compare nel terminale, nell'Excel e in risultati/<caso>/00_sintesi/RISULTATO.md.
-    "lato_cubo_min_mm": 320.0,      # limite inferiore dell'intervallo (mm)
-    "lato_cubo_max_mm": 340.0,      # limite superiore (mm)
-    "lato_cubo_passo_mm": 20.0,     # passo: ogni lato in più allunga la run (320-340 con passo 20 = 2 lati)
+    "lato_cubo_min_mm": 320.0,      # [strutturisti] lato del telaio di alluminio, misura esterna: FISSO
+    "lato_cubo_max_mm": 320.0,      # uguale al minimo = un solo lato
+    "lato_cubo_passo_mm": 20.0,
     "parete_cubo_mm": 3.0,          # SEGNAPOSTO: ingombro della parete (per lo spazio interno)
     "parete_condotto_mm": 1.2,      # SEGNAPOSTO: stampa 3D, >= 0,8 mm per FDM
-    "gioco_tra_condotti_mm": 5.0,   # SEGNAPOSTO
+    "gioco_tra_condotti_mm": 3.0,   # gioco minimo tra due blocchi di condotto nel vertice (vibrazioni)
     "centro_di_massa_mm": [0.0, 0.0, 0.0],
     "scostamento_baricentro_mm": 5.0,   # [XLS] foglio Assetto: offset per il bilancio di momento
 }
 
 # Moduli fissi dietro il centro delle facce [PIL] (dimensioni SEGNAPOSTO):
 # (asse 0=X 1=Y 2=Z, segno, larghezza_u, larghezza_v, profondità) in mm, u = asse+1, v = asse+2
-ZONE_RISERVATE = {
-    "stereocamera + LiDAR (fronte)": (1, +1, 70.0, 120.0, 60.0),
-    "monocamera (retro)":            (1, -1, 50.0, 50.0, 40.0),
-    "aggancio utensili Lego (alto)": (2, +1, 80.0, 80.0, 25.0),
-    "docking non invasivo (basso)":  (2, -1, 80.0, 80.0, 25.0),
-}
+ZONE_RISERVATE = {}       # le collocano gli strutturisti: per ora non influenzano lunghezza e posizione dei condotti
 ZONA_CENTRALE_FACCE_MM = 120.0     # quadrato centrale di ogni faccia da lasciare libero da bocche
 FACCIA_SPORTELLINO = (0, +1)       # [PIL] una faccia laterale = sportellino batteria
 FACCIA_LIBERA = (0, -1)            # [PIL] l'altra laterale: libera (lì le bocche sono ammesse anche al centro)
@@ -120,25 +135,11 @@ FACCIA_LIBERA = (0, -1)            # [PIL] l'altra laterale: libera (lì le bocc
 # =============================================================================
 # criterio: "faccia_sportellino" = deve toccare la faccia dello sportellino; "centro" = il più vicino al centro
 # dim None = calcolato dal numero di motori; massa None = calcolata (vedi TELAIO)
-COMPONENTI = {
-    "batteria NiMH 24 V (sportellino)":  {"dim": (150.0, 100.0, 80.0), "criterio": "faccia_sportellino",
-                                          "massa_kg": 1.10},   # [COMP] 20 celle BK300SCP; massa SEGNAPOSTO
-    "ruote di reazione (3 x Ø100 x 30)": {"dim": (130.0, 130.0, 130.0), "criterio": "centro",
-                                          "massa_kg": 0.50},   # [COMP] 0,50 kg (conversazione); inviluppo SEGNAPOSTO
-    "blocco avionica":                   {"dim": (200.0, 150.0, 50.0), "criterio": "centro",
-                                          "massa_kg": 0.30},   # SEGNAPOSTO
-    "regolatori ESC":                    {"dim": None, "criterio": "centro", "massa_kg": None},
-}
+COMPONENTI = {}           # disposizione non ancora comunicata: per ora non influenza; la massa è nei 6 kg
 ESC_4IN1_MM = (36.0, 36.0, 12.0)    # una scheda ogni 4 motori, SEGNAPOSTO
 
 # Masse fisse che non occupano volume da collocare (moduli delle facce, cavi, ...) in kg, tutte SEGNAPOSTO
-MASSE_FISSE = {
-    "stereocamera + LiDAR": 0.15,
-    "monocamera": 0.03,
-    "aggancio utensili Lego": 0.05,
-    "docking non invasivo": 0.08,
-    "cablaggi e connettori (non propulsione)": 0.10,
-}
+MASSE_FISSE = {}          # comprese nei 6 kg della missione
 
 # =============================================================================
 # 5. TELAIO   (stima della massa della struttura; tutti SEGNAPOSTO finché non si pesa un prototipo)
@@ -146,7 +147,14 @@ MASSE_FISSE = {
 # Ogni configurazione si porta dietro una massa strutturale diversa: condotti più lunghi,
 # curve, staffe, fori nel guscio, tacche e blocchi di vertice.  Dettaglio delle voci in configurazioni_designer/modelli/massa.py.
 TELAIO = {
-    "materiale_guscio": "PA12 (SLS)",       # uno dei MATERIALI (sezione 9): materiale della struttura portante di S4
+    # --- telaio di alluminio di S4 [strutturisti]: barre a sezione quadrata su tutti gli spigoli e una croce per
+    #     faccia (barre tra le mezzerie degli spigoli opposti).  Sostituisce guscio, longheroni e staffe.
+    "lato_barra_mm": 10.0,                  # lato della sezione quadrata della barra
+    "parete_barra_mm": 1.0,                 # spessore della parete del tubo quadro (solo per "tubo_quadro")
+    "forma_barra": "tubo_quadro",           # "tubo_quadro" (cava) oppure "piena"
+    "materiale_telaio": "alluminio 6061",
+    # --- voci delle altre configurazioni (in S4 con telaio di alluminio non si usano, tranne nodi, ESC, cavi, viteria)
+    "materiale_guscio": "PETG (FDM)",       # uno dei MATERIALI (sezione 9)
     "spessore_equivalente_guscio_mm": 1.0,  # massa del pannello / (area · densità): pannello nervato o sandwich
     "massa_longherone_g_per_m": 50.0,       # longheroni sugli spigoli (profilo a L 10x10x1 in alluminio ≈ 54 g/m)
     "massa_nodo_g": 12.0,                   # nodo d'angolo (8 vertici)
@@ -195,6 +203,7 @@ ELEMENTI = {
 # =============================================================================
 # Coefficienti adimensionali: phi = c_x/U_punta, psi = Dp_t/(rho U_punta^2).
 # SEGNAPOSTO: sostituire con le curve misurate (chiave "tabella" con phi, psi, eta).
+# Con DIMENSIONAMENTO non si usano: la ventola è quella del dimensionamento.
 TIPI_VENTOLA = {
     "assiale_alta_pressione": dict(phi_d=0.55, psi_d=0.30, psi_0_su_psi_d=1.40, eta_max=0.72, Re_rif=2e5,
                                    larghezza_eta=0.60, nu_min=0.40, Z=7, corda_su_D=0.18),
@@ -219,7 +228,7 @@ ELETTRICO = {
     "corrente_max_pacco_A": 15.0,    # [COMP] 5 C sul pacco da 3 Ah (conversazione), SEGNAPOSTO
 }
 # massa del rotore della ventola: m = c * D^3 (riferimento: 3 g a D = 30 mm) SEGNAPOSTO
-ROTORE = {"massa_rif_g": 3.0, "D_rif_mm": 30.0, "k_inerzia": 0.30}
+ROTORE = {"massa_rif_g": 3.0, "D_rif_mm": 30.0, "k_inerzia": 0.30}   # con DIMENSIONAMENTO: inerzia delle pale del caso
 
 # =============================================================================
 # 8. LIMITI
@@ -244,15 +253,15 @@ MATERIALI = {
     "resina tenace (SLA)": dict(E=2.5e9, nu=0.38, rho=1180.0, sigma_snervamento=55e6, stampabile_max_mm=200.0),
     "alluminio 6061":      dict(E=69e9, nu=0.33, rho=2700.0, sigma_snervamento=276e6, stampabile_max_mm=1000.0),
 }
-MATERIALE_CONDOTTO = "PA12 (SLS)"       # il più leggero tra i materiali stampabili elencati
-CARICHI = {"g_ipergravita": 1.8, "g_atterraggio_emergenza": 9.0}   # [EUG] 1,8 g; [ESA] carichi d'emergenza
+MATERIALE_CONDOTTO = "PETG (FDM)"       # materiale predefinito dei blocchi dei condotti
+CARICHI = {"g_ipergravita": 1.8, "g_atterraggio_emergenza": None}   # [EUG] 1,8 g; il caso a 9 g non si verifica
 
 # =============================================================================
 # 10. OTTIMIZZAZIONE E CLASSIFICA
 # =============================================================================
 OTTIMIZZAZIONE = {
-    "diametri_mm": [26, 30, 34, 38, 42, 46, 50, 55, 60],   # diametri del condotto alla ventola provati
-    "sigma": [1.00],                                      # A_uscita / A_ventola: 1 = niente Venturi (per ora)
+    "diametri_mm": [58],                                  # SOSTITUITO dal dimensionamento (diametro della ventola)
+    "sigma": [1.00],                                      # non usato: il condotto (venturi) è quello del dimensionamento
     "pesi": {                                             # peso dei criteri nel punteggio (somma libera)
         "spazio": 0.30,          # volume libero dopo i componenti
         "perdite": 0.25,         # potenza elettrica per la spinta richiesta e quota di perdite
@@ -288,30 +297,28 @@ REALIZZABILITA = {
 # Per aggiungere uno scenario: copiare un blocco, cambiare id e parametri.
 SCENARI = [
     {
-        "id": "S4_SPIGOLI_CENTRATI_12",
+        "id": "S4_SPIGOLI_TELAIO_12",
         "attivo": True,
-        "nome": "12 condotti centrati sugli spigoli, accorciati e spostati, volumetti tolti ai vertici",
-        "topologia": "spigoli_centrati",
-        "origine": "Proposta dell'utente (foto CAD): base con tre piani di simmetria, poi accorciamento e spostamento",
-        "descrizione": ("Ogni spigolo ha un condotto dritto parallelo, tangente alle due facce che lo formano. "
-                        "Nel vertice le tre rette si incontrerebbero: si elimina l'intersezione accorciando i "
-                        "condotti (restano centrati sullo spigolo) e/o spostandoli lungo lo spigolo; dove serve si "
-                        "toglie un volumetto d'angolo, così ogni condotto sbocca nel vertice. Presa e uscita sono "
-                        "alle due estremità; le coppie diagonali danno forza pura."),
-        "pregi_attesi": "Condotti corti e dritti (poca massa e attrito); nessuna curva né effetto di sistema; 12 pezzi uguali.",
-        "difetti_attesi": "Volumetti d'angolo che tolgono volume interno; getti che escono dai vertici; 12 motori.",
-        # --- parametri della configurazione (le varianti in "varianti_geometria" vengono provate tutte)
-        "lunghezza_frazione": 0.8,            # lunghezza del condotto / lunghezza massima (1 = arriva al limite)
-        "spostamento_frazione": 0.0,          # 0 = centrato (3 piani di simmetria); >0 verso il verso del suo asse
-        "posizione_ventola_frazione": 0.3,    # ventola a questa frazione del condotto, dalla presa
+        "nome": "12 condotti del dimensionamento lungo gli spigoli, dentro un telaio di alluminio",
+        "topologia": "spigoli_telaio",
+        "origine": "S4 con il telaio degli strutturisti e il condotto + ventola del dimensionamento",
+        "descrizione": ("Telaio di alluminio: barre a sezione quadrata su tutti gli spigoli e una croce per faccia. "
+                        "Ogni condotto è il condotto del dimensionamento (venturi + ventola) dentro un blocco a sezione "
+                        "quadrata, che tocca la barra dello spigolo spigolo contro spigolo con le diagonali allineate. "
+                        "Parte solida come S4: volumetti d'angolo tolti ai vertici, dove i condotti sboccano; il getto "
+                        "in uscita attraversa il telaio e la parte che urta le barre è persa e deviata lungo la faccia."),
+        "pregi_attesi": "Condotti dritti e uguali; telaio indipendente dai condotti; dati di ventola e venturi coerenti col dimensionamento.",
+        "difetti_attesi": "Getti che escono dai vertici e attraversano il telaio; poco margine di lunghezza nei vertici; 12 motori.",
+        # --- parametri
+        "parete_minima_blocco_mm": 2.0,       # parete minima del blocco attorno al foro: L* = D_interno_max + 2 x questa
+        "riempimento_blocchi": 0.20,          # SEGNAPOSTO: riempimento della stampa dei blocchi (scala la loro massa)
+        "quota_prolunga_ingresso": 0.5,       # come si divide la prolunga tra ingresso e uscita del condotto
         "verso_coppia_D1": -1,
-        # --- struttura portante: pareti piene dietro le facce e una trave piena attorno a ogni condotto
-        "riempimento": 0.20,                  # frazione di riempimento della stampa (0,2 = 20 %): scala la massa
-        "varianti_geometria": {               # ogni lista è un range: si provano tutte le combinazioni (5 x 1 x 3 x 3 = 45)
-            "lunghezza_frazione": [0.6, 0.7, 0.8, 0.9, 1.0],      # lunghezza del condotto / lunghezza massima: se ne cerca l'ottimo
-            "spostamento_frazione": [0.0],                         # estremi uguali = valore fisso: condotto centrato
-            "spessore_parete_faccia_mm": [5.0, 10.0, 15.0],        # parete piena dietro ogni faccia (dalla superficie esterna)
-            "spessore_attorno_condotto_mm": [3.0, 6.0, 10.0],      # materiale tra il condotto e l'esterno della sua trave
+        "varianti_geometria": {               # si provano tutte le combinazioni (5 x 5 = 25)
+            # lunghezza del condotto = L_tubo del dimensionamento + quota della prolunga massima che entra nel vertice
+            "lunghezza_frazione": [0.0, 0.25, 0.5, 0.75, 1.0],
+            # spostamento lungo lo spigolo, in frazione del margine che resta (0 = centrato)
+            "spostamento_frazione": [-1.0, -0.5, 0.0, 0.5, 1.0],
         },
     },
 ]

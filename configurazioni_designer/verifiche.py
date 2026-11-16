@@ -269,6 +269,68 @@ def test_massa_tubo():
     verifica("massa del tubo = rho * area dell'anello * lunghezza", abs(m - atteso) / atteso < 1e-9, f"{m * 1000:.2f} g")
 
 
+def _dim_finto():
+    """Dimensionamento di prova (numeri tondi) per le verifiche della topologia spigoli_telaio."""
+    rpm = np.linspace(5000, 30000, 26)
+    return {"caso": "prova", "statore": True, "D_interno_max_mm": 64.0, "L_tubo_mm": 137.0,
+            "D_ingresso_mm": 58.0, "D_ventola_mm": 58.0, "D_uscita_mm": 61.0, "z_ventola_mm": 61.0,
+            "curva": {"rpm": rpm, "T_N": 1.5 * (rpm / 20000) ** 2, "P_W": 18.0 * (rpm / 20000) ** 3,
+                      "Q_m3_s": 0.057 * rpm / 20000, "dp_Pa": 250 * (rpm / 20000) ** 2,
+                      "coppia_Nm": 18.0 * (rpm / 20000) ** 3 / (rpm * 2 * math.pi / 60)},
+            "rho_rif": 1.2, "fattore_ventola_vera": 1.0, "k_rpm_statore": 1.0, "k_P_statore": 1.0,
+            "coppia_netta_su_rotore": 0.0, "Q_progetto_m3_s": 0.057, "dp_progetto_Pa": 250.0}
+
+
+def test_spigoli_telaio():
+    """Telaio di alluminio con i blocchi dei condotti: vertici, simmetria, getto sul telaio, propulsore."""
+    from .geometria.scenari import gen_spigoli_telaio, intercettazione_telaio
+    from .core import dimensionamento as DM
+    cfg = {"geometria": {"lato_cubo_mm": 320.0, "gioco_tra_condotti_mm": 3.0},
+           "telaio": {"lato_barra_mm": 10.0}, "dimensionamento": _dim_finto()}
+    # asse del condotto e limite delle estremità: a = (L/2 - l) - L*/2, estremità <= a - L*/2 - gioco
+    lay = gen_spigoli_telaio({"id": "p", "lunghezza_frazione": 1.0, "spostamento_frazione": 0.0}, 58.0, 1.0, cfg)
+    p = lay.parametri
+    verifica("telaio: lato del blocco = D interno max + 2 x 2 mm", abs(p["lato_blocco_mm"] - 68.0) < 1e-9)
+    verifica("telaio: asse a (160 - 10) - 34 = 116 mm dal centro", abs(p["asse_condotto_mm"] - 116.0) < 1e-9)
+    verifica("telaio: lunghezza massima nel vertice = 2 (116 - 34 - 3) = 158 mm",
+             abs(p["lunghezza_condotto_mm"] - 158.0) < 1e-9)
+    # nessuna sovrapposizione tra blocchi, per lunghezze e spostamenti diversi
+    peggio = math.inf
+    for fl in (0.0, 0.5, 1.0):
+        for fs in (-1.0, 0.0, 1.0):
+            l2 = gen_spigoli_telaio({"id": "p", "lunghezza_frazione": fl, "spostamento_frazione": fs}, 58.0, 1.0, cfg)
+            B = l2.blocchi
+            for i in range(len(B)):
+                for j in range(i + 1, len(B)):
+                    sep = max(max(B[j][0][k] - B[i][1][k], B[i][0][k] - B[j][1][k]) for k in range(3))
+                    peggio = min(peggio, sep)
+    verifica("telaio: blocchi dei condotti separati di almeno il gioco", peggio >= 3.0 - 1e-6, f"separazione {peggio:.2f} mm")
+    # blocchi dentro il telaio (tra le facce interne)
+    dentro = all(np.all(np.abs(mn) <= 150 + 1e-9) and np.all(np.abs(mx) <= 150 + 1e-9) for mn, mx in lay.blocchi)
+    verifica("telaio: blocchi tangenti ai piani interni del telaio, mai dentro le barre", dentro)
+    # simmetria rispetto ai tre piani con il condotto centrato
+    chiavi = _chiavi_condotti(lay)
+    verifica("telaio: tre piani di simmetria con il condotto centrato",
+             all(_specchio(chiavi, k) == chiavi for k in range(3)))
+    # getto sul telaio: nessuna barra -> 0; getto centrato sulla croce -> metà sulla barra (circa)
+    f0, _ = intercettazione_telaio((80.0, 80.0), 20.0, 160.0, 10.0)
+    verifica("telaio: getto lontano dalle barre, niente intercettato", f0 == 0.0)
+    f1, _ = intercettazione_telaio((0.0, 80.0), 5.0, 160.0, 10.0)
+    verifica("telaio: getto più stretto della barra della croce, tutto intercettato", f1 > 0.99, f"{f1:.3f}")
+    # propulsore: alla spinta della curva, giri e potenza della curva; con perdite (1 + eps) sulla potenza
+    d = cfg["dimensionamento"]
+    pt = DM.punto(d, 1.5, 1.2)
+    verifica("propulsore: spinta della curva -> giri e potenza della curva",
+             abs(pt["rpm"] - 20000) < 1 and abs(pt["P_albero_W"] - 18.0) < 1e-6, f"{pt['rpm']:.1f} rpm")
+    pt2 = DM.punto(d, 1.5, 1.2, eps_perdite=0.1)
+    verifica("propulsore: perdite aggiunte del 10 % -> potenza +10 %", abs(pt2["P_albero_W"] / pt["P_albero_W"] - 1.1) < 1e-9)
+    pt3 = DM.punto(d, 1.5, 0.6)
+    verifica("propulsore: densità dimezzata -> stessa spinta con giri x sqrt(2)",
+             abs(pt3["rpm"] / pt["rpm"] - math.sqrt(2)) < 0.01, f"{pt3['rpm'] / pt['rpm']:.4f}")
+    pt4 = DM.punto(d, 1.5 * 0.9, 1.2, frazione_intercettata=0.1)
+    verifica("propulsore: 10 % del getto sul telaio -> serve la spinta piena all'ugello", abs(pt4["rpm"] - pt["rpm"]) < 1)
+
+
 def esegui(stampa=print):
     """Esegue tutte le verifiche; ritorna (superate, totali)."""
     RISULTATI.clear()
